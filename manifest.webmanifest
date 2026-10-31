@@ -1,0 +1,16 @@
+{
+  "name": "Sınav Saati",
+  "short_name": "Sınav Saati",
+  "description": "KPSS, ALES ve YDS denemeleri için 10:15'te başlayan analog sınav saati",
+  "lang": "tr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#E8D6CF",
+  "theme_color": "#E8D6CF",
+  "icons": [
+    { "src": "simge-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "simge-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

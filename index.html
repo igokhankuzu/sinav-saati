@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#E8D6CF">
+<title>Sınav Saati</title>
+<!-- Ana ekrana eklenince uygulama gibi açılması için (web adresinden açıldığında çalışır) -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sınav Saati">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23aaa'/%3E%3Ccircle cx='32' cy='32' r='26' fill='%23f7f7f7'/%3E%3Cpath d='M32 32 L20 23 M32 32 L52 32' stroke='%231f1f1f' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --duvar: #E8D6CF;
+    --yazi: #1f1f1f;
+    --ikincil: #5c5c5c;
+    --kontrol-zemin: rgba(255, 255, 255, 0.6);
+    --kontrol-kenar: rgba(0, 0, 0, 0.15);
+    --vurgu: #2f6fd6;
+    --vurgu-yazi: #ffffff;
+    --panel: #fbfaf8;
+    --kirmizi: #c62828;
+  }
+  body.koyu {
+    --yazi: #f2f2f2;
+    --ikincil: #b3b3b3;
+    --kontrol-zemin: rgba(255, 255, 255, 0.08);
+    --kontrol-kenar: rgba(255, 255, 255, 0.2);
+    --vurgu: #6ea0ff;
+    --vurgu-yazi: #0d1a33;
+    --panel: #26272b;
+    --kirmizi: #ff6b6b;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--duvar);
+    color: var(--yazi);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    transition: background-color 0.3s;
+    -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
+  }
+
+  main {
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+             max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+
+  .kontroller { width: 100%; max-width: 560px; transition: opacity 0.4s; }
+  .ust { display: flex; flex-direction: column; gap: 10px; }
+  .satir { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .satir label { color: var(--ikincil); font-size: 15px; }
+
+  select, input[type="time"], button {
+    font: inherit;
+    font-size: 16px;
+    color: var(--yazi);
+    background: var(--kontrol-zemin);
+    border: 1px solid var(--kontrol-kenar);
+    border-radius: 10px;
+    min-height: 44px;
+    padding: 0 14px;
+  }
+  select { width: 100%; }
+  select option { color: #1f1f1f; background: #fff; }
+  input[type="time"] { color-scheme: light; }
+  body.koyu input[type="time"] { color-scheme: dark; }
+  button { cursor: pointer; }
+  button:disabled, select:disabled, input:disabled { opacity: 0.45; cursor: default; }
+  button.ana { background: var(--vurgu); color: var(--vurgu-yazi); border-color: transparent; font-weight: 600; min-width: 120px; }
+
+  .ozel { display: none; align-items: center; gap: 8px; margin-left: auto; }
+  .ozel.gorunur { display: flex; }
+  .ozel button { width: 44px; padding: 0; }
+  .ozel span { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+
+  #saatAlani { flex: 1; width: 100%; position: relative; min-height: 200px; }
+  .saatIc {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  canvas { display: block; }
+  #dijital {
+    font-family: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.15;
+  }
+
+  .alt { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .bilgi { text-align: center; display: flex; flex-direction: column; gap: 3px; }
+  #aralik { font-weight: 600; font-size: 17px; }
+  #kalan { color: var(--ikincil); font-variant-numeric: tabular-nums; }
+  #kalan.uyari, #kalan.bitti { color: var(--kirmizi); }
+  #kalan.bitti { font-weight: 700; }
+  #soruBilgi { color: var(--ikincil); font-size: 14px; }
+  .dugmeler { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+  /* Yatay telefon gibi alçak ekranlar: saat solda, kontroller sağda */
+  @media (orientation: landscape) and (max-height: 620px) {
+    main {
+      display: grid;
+      grid-template-columns: 1fr minmax(240px, 320px);
+      grid-template-rows: auto 1fr;
+      grid-template-areas: "saat ust" "saat alt";
+      align-items: start;
+    }
+    #saatAlani { grid-area: saat; height: 100%; }
+    .ust { grid-area: ust; }
+    .alt { grid-area: alt; align-self: center; }
+    body.sade main { grid-template-columns: 1fr 0; gap: 0; }
+  }
+
+  /* Tam ekranda sınav sürerken sadece saat kalır */
+  body.sade .kontroller { opacity: 0; pointer-events: none; height: 0; overflow: hidden; }
+  body.sade { cursor: none; }
+
+  /* Tema paneli */
+  dialog {
+    border: none;
+    border-radius: 16px;
+    padding: 20px;
+    width: min(520px, calc(100vw - 32px));
+    background: var(--panel);
+    color: var(--yazi);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.3); }
+  dialog h2 { margin: 0 0 14px; font-size: 20px; }
+  dialog h3 { margin: 18px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ikincil); }
+  .altBaslik { font-size: 13px; color: var(--ikincil); margin: 8px 0 6px; }
+  .secenekler { display: flex; flex-wrap: wrap; gap: 10px; }
+  .secenek {
+    background: none; border: none; padding: 4px; min-height: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    color: var(--ikincil); font-size: 12px; width: 64px;
+  }
+  .ornek {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 1px solid rgba(128, 128, 128, 0.45);
+    outline: 2.5px solid transparent; outline-offset: 3px;
+  }
+  .ekranOrnek {
+    font-family: ui-monospace, "SF Mono", "Roboto Mono", Menlo, monospace;
+    font-size: 14px; font-weight: 500;
+    padding: 5px 8px; border-radius: 6px;
+    border: 1px solid rgba(128, 128, 128, 0.45);
+    outline: 2.5px solid transparent; outline-offset: 3px;
+  }
+  .ekranOrnek.sade { border-style: dashed; }
+  .secenek.secili .ornek, .secenek.secili .ekranOrnek { outline-color: var(--vurgu); }
+  .secenek.secili { color: var(--yazi); }
+  #ekranSecenekleri.kapali { opacity: 0.4; pointer-events: none; }
+  .anahtar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+  .anahtar input { width: 24px; height: 24px; accent-color: var(--vurgu); }
+  .panelAlt { display: flex; justify-content: space-between; margin-top: 20px; gap: 10px; }
+</style>
+</head>
+<body>
+<!-- Önizlemeler (WhatsApp, Drive, iPhone Dosyalar) kodu çalıştırmaz; o zaman bu uyarı görünür. -->
+<noscript>
+  <style>main { display: none !important; }</style>
+  <div style="padding:16px;margin:16px;border-radius:12px;background:#fff3cd;color:#5c4400;font-size:17px;line-height:1.4">
+    <b>Bu önizleme saati çalıştıramıyor.</b><br>
+    Dosyayı <b>Chrome</b> veya <b>Samsung Internet</b> ile açın
+    (dosyaya uzun basın → <i>Birlikte aç</i> / <i>Farklı uygulamada aç</i>).
+  </div>
+</noscript>
+<main>
+  <div class="kontroller ust">
+    <select id="sinav" aria-label="Sınav"></select>
+    <div class="satir">
+      <label for="baslangic">Başlangıç</label>
+      <input type="time" id="baslangic" value="10:15">
+      <div class="ozel" id="ozel">
+        <button id="eksi" aria-label="5 dakika azalt">−</button>
+        <span id="ozelDakika">30 dk</span>
+        <button id="arti" aria-label="5 dakika artır">+</button>
+      </div>
+    </div>
+  </div>
+
+  <section id="saatAlani">
+    <div class="saatIc" id="saatIc">
+      <canvas id="saat" aria-label="Analog sınav saati"></canvas>
+      <div id="dijital"></div>
+    </div>
+  </section>
+
+  <div class="kontroller alt">
+    <div class="bilgi">
+      <div id="aralik"></div>
+      <div id="kalan"></div>
+      <div id="soruBilgi"></div>
+    </div>
+    <div class="dugmeler">
+      <button class="ana" id="baslat">Başlat</button>
+      <button id="sifirla">Sıfırla</button>
+      <button id="tamEkran">Tam Ekran</button>
+      <button id="temaAc">Tema</button>
+    </div>
+  </div>
+</main>
+
+<dialog id="tema">
+  <h2>Tema</h2>
+  <h3>Duvar rengi</h3>
+  <div class="altBaslik">Gündüz</div>
+  <div class="secenekler" id="gunduzRenkleri"></div>
+  <div class="altBaslik">Gece</div>
+  <div class="secenekler" id="geceRenkleri"></div>
+
+  <h3>Dijital saat</h3>
+  <label class="anahtar">Dijital saati göster <input type="checkbox" id="dijitalGoster"></label>
+  <div class="secenekler" id="ekranSecenekleri"></div>
+
+  <div class="panelAlt">
+    <button id="varsayilan">Varsayılana dön</button>
+    <button class="ana" id="temaKapat" autofocus>Tamam</button>
+  </div>
+</dialog>
+
+<script>
+// ---------- Veriler ----------
+// Yeni bir sınav eklemek için listeye bir satır eklemen yeterli. soru: 0 = özel süre.
+const SINAVLAR = [
+  { ad: "KPSS Genel Yetenek - Genel Kültür", dakika: 130, soru: 120 },
+  { ad: "KPSS Eğitim Bilimleri", dakika: 100, soru: 80 },
+  { ad: "ALES", dakika: 150, soru: 100 },
+  { ad: "YDS", dakika: 180, soru: 80 },
+  { ad: "Özel Süre", dakika: 30, soru: 0 }
+];
+
+const DUVAR_GUNDUZ = [
+  ["Pudra", "#E8D6CF"], ["Fildişi", "#F2EBD9"], ["Kum", "#E3D6C2"], ["Adaçayı", "#D6E3D4"],
+  ["Gök", "#D6E3ED"], ["Lavanta", "#E0DBED"], ["Taş", "#E0DED9"]
+];
+const DUVAR_GECE = [
+  ["Gece Mavisi", "#1E2633"], ["Antrasit", "#2A2B2E"], ["Orman", "#1F2B24"], ["Mürdüm", "#2B2230"], ["Kahve", "#2E2621"]
+];
+// Zemin boş = arka plansız; rakam boş = duvara göre otomatik
+const EKRAN_GORUNUMLERI = [
+  ["Klasik", "#262626", "#FFFFFF"], ["Yeşil LCD", "#141F14", "#5CFF73"], ["Kırmızı LED", "#1A1212", "#FF4033"],
+  ["Amber", "#1A1610", "#FFB833"], ["Açık", "#F7F7F5", "#262626"], ["Sade", "", ""]
+];
+
+const VARSAYILAN_TEMA = { duvar: "#E8D6CF", ekranZemin: "#262626", ekranYazi: "#FFFFFF", dijitalGoster: true };
+
+// ---------- Kayıt (tarayıcı izin vermezse sessizce vazgeçer) ----------
+const kayit = {
+  oku(anahtar, varsayilan) {
+    try {
+      const deger = localStorage.getItem("sinavSaati." + anahtar);
+      return deger === null ? varsayilan : JSON.parse(deger);
+    } catch { return varsayilan; }
+  },
+  yaz(anahtar, deger) {
+    try { localStorage.setItem("sinavSaati." + anahtar, JSON.stringify(deger)); } catch {}
+  }
+};
+
+const ayar = {
+  sinav: kayit.oku("sinav", SINAVLAR[0].ad),
+  ozelDakika: kayit.oku("ozelDakika", 30),
+  baslangicDakika: kayit.oku("baslangicDakika", 615), // 10:15
+  duvar: kayit.oku("duvar", VARSAYILAN_TEMA.duvar),
+  ekranZemin: kayit.oku("ekranZemin", VARSAYILAN_TEMA.ekranZemin),
+  ekranYazi: kayit.oku("ekranYazi", VARSAYILAN_TEMA.ekranYazi),
+  dijitalGoster: kayit.oku("dijitalGoster", VARSAYILAN_TEMA.dijitalGoster)
+};
+function ayarKaydet(anahtar, deger) { ayar[anahtar] = deger; kayit.yaz(anahtar, deger); }
+
+// ---------- Sayaç: bitiş anını tutar, böylece hiç kaymaz ----------
+const sayac = { toplam: 0, kalan: 0, calisiyor: false, bitis: 0, zamanlayici: null };
+
+function secilenSinav() { return SINAVLAR.find(s => s.ad === ayar.sinav) || SINAVLAR[0]; }
+function dakika() { const s = secilenSinav(); return s.soru === 0 ? ayar.ozelDakika : s.dakika; }
+
+function ayarla() {
+  duraklat();
+  sayac.toplam = dakika() * 60;
+  sayac.kalan = sayac.toplam;
+  guncelle();
+}
+function baslat() {
+  if (sayac.kalan <= 0 || sayac.calisiyor) return;
+  sesHazirla();
+  sayac.bitis = Date.now() + sayac.kalan * 1000;
+  sayac.calisiyor = true;
+  sayac.zamanlayici = setInterval(tik, 200);
+  ekranAcikTut();
+  guncelle();
+}
+function duraklat() {
+  clearInterval(sayac.zamanlayici);
+  sayac.calisiyor = false;
+  ekranKilidiBirak();
+  guncelle();
+}
+function sifirla() { duraklat(); sayac.kalan = sayac.toplam; guncelle(); }
+function tik() {
+  sayac.kalan = Math.max(0, (sayac.bitis - Date.now()) / 1000);
+  if (sayac.kalan === 0) { duraklat(); sesCal(); }
+  guncelle();
+}
+
+// ---------- Biçimlendirme ----------
+const iki = n => String(n).padStart(2, "0");
+function saatDakika(t) { const s = Math.floor(t) % 86400; return `${iki(Math.floor(s / 3600))}:${iki(Math.floor(s % 3600 / 60))}`; }
+function saatDakikaSaniye(t) { const s = Math.floor(t) % 86400; return `${saatDakika(s)}:${iki(s % 60)}`; }
+function kalanBicim(t) { const s = Math.ceil(t); return `${Math.floor(s / 3600)}:${iki(Math.floor(s % 3600 / 60))}:${iki(s % 60)}`; }
+
+// ---------- Analog saat ----------
+const tuval = document.getElementById("saat");
+const SIYAH = "#1f1f1f";
+
+function saatCiz(t) {
+  const boy = tuval.clientWidth;
+  if (!boy) return;
+  const dpr = window.devicePixelRatio || 1;
+  const ctx = tuval.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, boy, boy);
+  const r = boy / 2;
+
+  const nokta = (uzaklik, derece) => {
+    const a = derece * Math.PI / 180;
+    return [r + uzaklik * Math.sin(a), r - uzaklik * Math.cos(a)];
+  };
+  const daire = (yaricap, dolgu) => { ctx.beginPath(); ctx.arc(r, r, yaricap, 0, Math.PI * 2); ctx.fillStyle = dolgu; ctx.fill(); };
+  const cizgi = (a, b, kalinlik, renk) => {
+    ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b);
+    ctx.lineWidth = kalinlik; ctx.strokeStyle = renk; ctx.lineCap = "butt"; ctx.stroke();
+  };
+
+  // Gümüş çerçeve, koyu iç halka, beyaz kadran
+  const cerceve = ctx.createLinearGradient(0, 0, boy, boy);
+  cerceve.addColorStop(0, "#e0e0e0"); cerceve.addColorStop(0.5, "#9e9e9e"); cerceve.addColorStop(1, "#cccccc");
+  daire(r, cerceve);
+  ctx.beginPath(); ctx.arc(r, r, r * 0.995, 0, Math.PI * 2); ctx.lineWidth = 1; ctx.strokeStyle = "#808080"; ctx.stroke();
+  daire(r * 0.925, "#383838");
+  daire(r * 0.875, "#f7f7f7");
+
+  // Dakika şeridi
+  ctx.beginPath(); ctx.arc(r, r, r * 0.815, 0, Math.PI * 2); ctx.lineWidth = 1; ctx.strokeStyle = SIYAH; ctx.stroke();
+  for (let i = 0; i < 60; i++) {
+    const d = i * 6;
+    if (i % 5 === 0) cizgi(nokta(r * 0.79, d), nokta(r * 0.875, d), r * 0.022, SIYAH);
+    else cizgi(nokta(r * 0.815, d), nokta(r * 0.86, d), 1, SIYAH);
+  }
+
+  // Rakamlar
+  ctx.fillStyle = SIYAH;
+  ctx.font = `500 ${r * 0.22}px -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for (let i = 1; i <= 12; i++) {
+    const [x, y] = nokta(r * 0.645, i * 30);
+    ctx.fillText(String(i), x, y + r * 0.01);
+  }
+
+  // İbreler
+  const sn = Math.floor(t % 60);
+  const dk = (t / 60) % 60;
+  const akrep = ((t / 3600) % 12) * 30;
+  sivriIbre(ctx, r, akrep, r * 0.47, r * 0.08, r * 0.055);
+  sivriIbre(ctx, r, dk * 6, r * 0.78, r * 0.10, r * 0.042);
+
+  ctx.beginPath(); ctx.moveTo(...nokta(r * 0.18, sn * 6 + 180)); ctx.lineTo(...nokta(r * 0.80, sn * 6));
+  ctx.lineWidth = Math.max(1.5, r * 0.008); ctx.strokeStyle = "#cc1a1a"; ctx.lineCap = "round"; ctx.stroke();
+
+  // Altın göbek
+  daire(r * 0.03, "#cca84d");
+  daire(r * 0.012, "#595959");
+}
+
+// Göbekte geniş, uca doğru incelen ibre
+function sivriIbre(ctx, r, derece, uzunluk, kuyruk, genislik) {
+  const a = derece * Math.PI / 180;
+  const ileri = [Math.sin(a), -Math.cos(a)], yan = [Math.cos(a), Math.sin(a)];
+  const p = (i, y) => [r + ileri[0] * i + yan[0] * y, r + ileri[1] * i + yan[1] * y];
+  ctx.beginPath();
+  ctx.moveTo(...p(-kuyruk, -genislik * 0.35));
+  ctx.lineTo(...p(0, -genislik / 2));
+  ctx.lineTo(...p(uzunluk, -genislik * 0.15));
+  ctx.lineTo(...p(uzunluk, genislik * 0.15));
+  ctx.lineTo(...p(0, genislik / 2));
+  ctx.lineTo(...p(-kuyruk, genislik * 0.35));
+  ctx.closePath();
+  ctx.fillStyle = SIYAH;
+  ctx.fill();
+}
+
+// ---------- Ekran ----------
+const $ = id => document.getElementById(id);
+const saatAlani = $("saatAlani"), dijital = $("dijital");
+let tamEkran = false, kontrolGoster = false, gizlemeZamani = null;
+// Ana ekrandan açılan uygulama zaten tam ekrandır; sınav sürerken kontroller orada da gizlenir.
+const uygulamaModu = matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches
+  || navigator.standalone === true;
+
+function sinavSaati() { return ayar.baslangicDakika * 60 + (sayac.toplam - sayac.kalan); }
+
+// Saat, alana sığan en büyük boyutta çizilir; tam ekranda ekranı doldurur.
+function boyutla() {
+  const w = saatAlani.clientWidth, h = saatAlani.clientHeight;
+  const boy = Math.max(120, Math.floor(Math.min(w, h / (ayar.dijitalGoster ? 1.12 : 1))));
+  const dpr = window.devicePixelRatio || 1;
+  tuval.style.width = tuval.style.height = boy + "px";
+  tuval.width = tuval.height = Math.round(boy * dpr);
+  $("saatIc").style.gap = (boy * 0.025) + "px";
+  dijital.style.fontSize = Math.max(16, boy * 0.065) + "px";
+  dijital.style.padding = `${boy * 0.012}px ${boy * 0.04}px`;
+  dijital.style.borderRadius = (boy * 0.024) + "px";
+  saatCiz(sinavSaati());
+}
+
+function koyuMu(hex) {
+  const d = parseInt(hex.replace("#", ""), 16);
+  return (0.299 * (d >> 16 & 255) + 0.587 * (d >> 8 & 255) + 0.114 * (d & 255)) / 255 < 0.5;
+}
+
+function temaUygula() {
+  document.documentElement.style.setProperty("--duvar", ayar.duvar);
+  document.body.classList.toggle("koyu", koyuMu(ayar.duvar));
+  document.querySelector('meta[name="theme-color"]').content = ayar.duvar;
+  dijital.style.display = ayar.dijitalGoster ? "" : "none";
+  dijital.style.background = ayar.ekranZemin || "transparent";
+  dijital.style.color = ayar.ekranYazi || "var(--yazi)";
+  temaPaneliniGuncelle();
+  boyutla();
+}
+
+function guncelle() {
+  const s = secilenSinav();
+  const bas = ayar.baslangicDakika * 60;
+  const t = sinavSaati();
+
+  saatCiz(t);
+  dijital.textContent = saatDakikaSaniye(t);
+
+  $("aralik").textContent = `${saatDakika(bas)} → ${saatDakika(bas + sayac.toplam)}`;
+  const kalan = $("kalan");
+  const sonDilim = sayac.toplam > 0 && sayac.kalan / sayac.toplam < 0.1;
+  if (sayac.kalan === 0) { kalan.textContent = "Süre doldu!"; kalan.className = "bitti"; }
+  else { kalan.textContent = "Kalan " + kalanBicim(sayac.kalan); kalan.className = sonDilim ? "uyari" : ""; }
+
+  if (s.soru > 0) {
+    const sn = Math.floor(dakika() * 60 / s.soru);
+    $("soruBilgi").textContent = `${s.soru} soru · soru başına ortalama ${Math.floor(sn / 60)} dk ${sn % 60} sn`;
+  } else $("soruBilgi").textContent = "";
+
+  $("baslat").textContent = sayac.calisiyor ? "Duraklat" : "Başlat";
+  $("sinav").disabled = $("baslangic").disabled = sayac.calisiyor;
+  $("eksi").disabled = $("arti").disabled = sayac.calisiyor;
+  $("ozel").classList.toggle("gorunur", s.soru === 0);
+  $("ozelDakika").textContent = ayar.ozelDakika + " dk";
+  $("tamEkran").textContent = tamEkran ? "Küçült" : "Tam Ekran";
+
+  const sade = (tamEkran || uygulamaModu) && sayac.calisiyor && !kontrolGoster;
+  if (document.body.classList.contains("sade") !== sade) {
+    document.body.classList.toggle("sade", sade);
+    requestAnimationFrame(boyutla);
+  }
+}
+
+// Ekrana dokununca ya da fare oynayınca kontroller 3 saniye görünür
+function kisaGoster() {
+  kontrolGoster = true;
+  clearTimeout(gizlemeZamani);
+  gizlemeZamani = setTimeout(() => { kontrolGoster = false; guncelle(); }, 3000);
+  guncelle();
+}
+document.addEventListener("pointerdown", kisaGoster, true);
+document.addEventListener("pointermove", e => { if (e.pointerType === "mouse") kisaGoster(); });
+
+// ---------- Tam ekran ----------
+const tamEkranVar = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+if (!tamEkranVar) $("tamEkran").style.display = "none";
+function tamEkranDegistir() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else {
+    (el.requestFullscreen || el.webkitRequestFullscreen).call(el)?.catch?.(() => {});
+  }
+}
+function tamEkranDegisti() {
+  tamEkran = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  guncelle();
+}
+document.addEventListener("fullscreenchange", tamEkranDegisti);
+document.addEventListener("webkitfullscreenchange", tamEkranDegisti);
+
+// ---------- Ekranı açık tutma (tarayıcı izin verirse) ----------
+let ekranKilidi = null;
+async function ekranAcikTut() {
+  try { ekranKilidi = await navigator.wakeLock?.request("screen"); } catch {}
+}
+function ekranKilidiBirak() {
+  try { ekranKilidi?.release(); } catch {}
+  ekranKilidi = null;
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && sayac.calisiyor) { ekranAcikTut(); tik(); }
+});
+
+// ---------- Süre bitince zil ----------
+let ses = null;
+function sesHazirla() {
+  try {
+    ses = ses || new (window.AudioContext || window.webkitAudioContext)();
+    ses.resume?.();
+  } catch {}
+}
+function sesCal() {
+  if (!ses) return;
+  const t0 = ses.currentTime;
+  [880, 1320].forEach((frekans, i) => {
+    const t = t0 + i * 0.25;
+    const osc = ses.createOscillator(), kazanc = ses.createGain();
+    osc.type = "sine"; osc.frequency.value = frekans;
+    kazanc.gain.setValueAtTime(0.0001, t);
+    kazanc.gain.exponentialRampToValueAtTime(0.4, t + 0.02);
+    kazanc.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    osc.connect(kazanc).connect(ses.destination);
+    osc.start(t); osc.stop(t + 1.3);
+  });
+}
+
+// ---------- Tema paneli ----------
+const temaPaneli = $("tema");
+
+function secenekDugmesi(ad, ornek, secili, tikla) {
+  const b = document.createElement("button");
+  b.className = "secenek" + (secili ? " secili" : "");
+  b.append(ornek, document.createTextNode(ad));
+  b.addEventListener("click", tikla);
+  return b;
+}
+
+function temaPaneliniGuncelle() {
+  for (const [kutu, liste] of [[$("gunduzRenkleri"), DUVAR_GUNDUZ], [$("geceRenkleri"), DUVAR_GECE]]) {
+    kutu.replaceChildren(...liste.map(([ad, hex]) => {
+      const o = document.createElement("span");
+      o.className = "ornek"; o.style.background = hex;
+      return secenekDugmesi(ad, o, hex === ayar.duvar, () => { ayarKaydet("duvar", hex); temaUygula(); });
+    }));
+  }
+  $("ekranSecenekleri").replaceChildren(...EKRAN_GORUNUMLERI.map(([ad, zemin, yazi]) => {
+    const o = document.createElement("span");
+    o.className = "ekranOrnek" + (zemin ? "" : " sade");
+    o.textContent = "10:15";
+    o.style.background = zemin || "transparent";
+    o.style.color = yazi || "var(--yazi)";
+    return secenekDugmesi(ad, o, zemin === ayar.ekranZemin && yazi === ayar.ekranYazi, () => {
+      ayarKaydet("ekranZemin", zemin); ayarKaydet("ekranYazi", yazi); temaUygula();
+    });
+  }));
+  $("ekranSecenekleri").classList.toggle("kapali", !ayar.dijitalGoster);
+  $("dijitalGoster").checked = ayar.dijitalGoster;
+}
+
+$("temaAc").addEventListener("click", () => temaPaneli.showModal());
+$("temaKapat").addEventListener("click", () => temaPaneli.close());
+temaPaneli.addEventListener("click", e => { if (e.target === temaPaneli) temaPaneli.close(); });
+$("dijitalGoster").addEventListener("change", e => { ayarKaydet("dijitalGoster", e.target.checked); temaUygula(); });
+$("varsayilan").addEventListener("click", () => {
+  for (const [k, v] of Object.entries(VARSAYILAN_TEMA)) ayarKaydet(k, v);
+  temaUygula();
+});
+
+// ---------- Kontroller ----------
+const secim = $("sinav");
+for (const s of SINAVLAR) secim.add(new Option(s.ad, s.ad));
+secim.value = secilenSinav().ad;
+secim.addEventListener("change", () => { ayarKaydet("sinav", secim.value); ayarla(); });
+
+const baslangicKutusu = $("baslangic");
+baslangicKutusu.value = saatDakika(ayar.baslangicDakika * 60);
+baslangicKutusu.addEventListener("change", () => {
+  const [s, d] = baslangicKutusu.value.split(":").map(Number);
+  if (!Number.isNaN(s) && !Number.isNaN(d)) { ayarKaydet("baslangicDakika", s * 60 + d); guncelle(); }
+});
+
+function ozelDegistir(fark) {
+  ayarKaydet("ozelDakika", Math.min(300, Math.max(1, ayar.ozelDakika + fark)));
+  ayarla();
+}
+$("eksi").addEventListener("click", () => ozelDegistir(-5));
+$("arti").addEventListener("click", () => ozelDegistir(5));
+
+$("baslat").addEventListener("click", () => sayac.calisiyor ? duraklat() : baslat());
+$("sifirla").addEventListener("click", sifirla);
+$("tamEkran").addEventListener("click", tamEkranDegistir);
+// Tıklanan düğme odakta kalmasın; yoksa boşluk tuşu onu bir daha tetikler.
+document.querySelectorAll("button").forEach(b => b.addEventListener("click", () => b.blur()));
+
+// Klavye (bilgisayarda): boşluk = başlat/duraklat, F = tam ekran
+document.addEventListener("keydown", e => {
+  if (temaPaneli.open || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target.matches("input, select, textarea")) return;
+  if (e.key === " ") { e.preventDefault(); sayac.calisiyor ? duraklat() : baslat(); }
+  else if (e.key.toLowerCase() === "f" && tamEkranVar) tamEkranDegistir();
+});
+
+new ResizeObserver(boyutla).observe(saatAlani);
+temaUygula();
+ayarla();
+
+// Web adresinden açıldığında: ilk ziyaretten sonra internetsiz de çalışsın
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+</script>
+</body>
+</html>
