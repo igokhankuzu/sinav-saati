@@ -290,28 +290,63 @@ const sayac = { toplam: 0, kalan: 0, calisiyor: false, bitis: 0, zamanlayici: nu
 function secilenSinav() { return SINAVLAR.find(s => s.ad === ayar.sinav) || SINAVLAR[0]; }
 function dakika() { const s = secilenSinav(); return s.soru === 0 ? ayar.ozelDakika : s.dakika; }
 
+// Deneme başlamış ama ne bitmiş ne sıfırlanmış (çalışıyor ya da duraklatılmış)
+function devamEdiyor() { return sayac.kalan > 0 && sayac.kalan < sayac.toplam; }
+
+// Telefon uygulamayı arka planda kapatırsa deneme kaybolmasın diye durum kaydedilir.
+function sayacKaydet() {
+  kayit.yaz("sayac", { toplam: sayac.toplam, kalan: sayac.kalan, bitis: sayac.calisiyor ? sayac.bitis : 0 });
+}
+
+// Açılışta: kayıtlı yarım bir deneme varsa kaldığı yerden devam eder.
+function geriYukle() {
+  const k = kayit.oku("sayac", null);
+  if (!k || !(k.toplam > 0) || k.toplam !== dakika() * 60) { ayarla(); return; }
+  sayac.toplam = k.toplam;
+  if (k.bitis > 0) {
+    // Uygulama kapalıyken de zaman aktı; bitiş anına göre hesapla.
+    sayac.kalan = Math.max(0, (k.bitis - Date.now()) / 1000);
+    if (sayac.kalan > 0) calistir(k.bitis); else sayacKaydet();
+  } else {
+    sayac.kalan = Math.min(sayac.toplam, Math.max(0, Number(k.kalan) || 0));
+  }
+  guncelle();
+}
+
 function ayarla() {
   duraklat();
   sayac.toplam = dakika() * 60;
   sayac.kalan = sayac.toplam;
+  sayacKaydet();
   guncelle();
 }
 function baslat() {
   if (sayac.kalan <= 0 || sayac.calisiyor) return;
   sesHazirla();
-  sayac.bitis = Date.now() + sayac.kalan * 1000;
-  sayac.calisiyor = true;
-  sayac.zamanlayici = setInterval(tik, 200);
-  ekranAcikTut();
+  calistir(Date.now() + sayac.kalan * 1000);
+  sayacKaydet();
   guncelle();
 }
+function calistir(bitis) {
+  sayac.bitis = bitis;
+  sayac.calisiyor = true;
+  clearInterval(sayac.zamanlayici);
+  sayac.zamanlayici = setInterval(tik, 200);
+  ekranAcikTut();
+}
 function duraklat() {
+  if (sayac.calisiyor) sayac.kalan = Math.max(0, (sayac.bitis - Date.now()) / 1000);
   clearInterval(sayac.zamanlayici);
   sayac.calisiyor = false;
   ekranKilidiBirak();
+  sayacKaydet();
   guncelle();
 }
-function sifirla() { duraklat(); sayac.kalan = sayac.toplam; guncelle(); }
+function sifirla() { duraklat(); sayac.kalan = sayac.toplam; sayacKaydet(); guncelle(); }
+// Deneme yarıdaysa yanlışlıkla sıfırlanmasın diye önce sorar.
+function sifirlaSor() {
+  if (!devamEdiyor() || confirm("Deneme sıfırlansın mı?\nGeçen süre silinir ve saat başlangıca döner.")) sifirla();
+}
 function tik() {
   sayac.kalan = Math.max(0, (sayac.bitis - Date.now()) / 1000);
   if (sayac.kalan === 0) { duraklat(); sesCal(); }
@@ -466,8 +501,10 @@ function guncelle() {
   } else $("soruBilgi").textContent = "";
 
   $("baslat").textContent = sayac.calisiyor ? "Duraklat" : "Başlat";
-  $("sinav").disabled = $("baslangic").disabled = sayac.calisiyor;
-  $("eksi").disabled = $("arti").disabled = sayac.calisiyor;
+  // Deneme yarıdayken sınav ve saat değiştirilemez; değiştirmek denemeyi sıfırlardı.
+  const kilitli = sayac.calisiyor || devamEdiyor();
+  $("sinav").disabled = $("baslangic").disabled = kilitli;
+  $("eksi").disabled = $("arti").disabled = kilitli;
   $("ozel").classList.toggle("gorunur", s.soru === 0);
   $("ozelDakika").textContent = ayar.ozelDakika + " dk";
   $("tamEkran").textContent = tamEkran ? "Küçült" : "Tam Ekran";
@@ -486,7 +523,11 @@ function kisaGoster() {
   gizlemeZamani = setTimeout(() => { kontrolGoster = false; guncelle(); }, 3000);
   guncelle();
 }
-document.addEventListener("pointerdown", kisaGoster, true);
+document.addEventListener("pointerdown", () => {
+  kisaGoster();
+  // Yeniden açılıp kaldığı yerden devam eden denemede zil sesinin çalabilmesi için
+  if (sayac.calisiyor) sesHazirla();
+}, true);
 document.addEventListener("pointermove", e => { if (e.pointerType === "mouse") kisaGoster(); });
 
 // ---------- Tam ekran ----------
@@ -606,7 +647,7 @@ $("eksi").addEventListener("click", () => ozelDegistir(-5));
 $("arti").addEventListener("click", () => ozelDegistir(5));
 
 $("baslat").addEventListener("click", () => sayac.calisiyor ? duraklat() : baslat());
-$("sifirla").addEventListener("click", sifirla);
+$("sifirla").addEventListener("click", sifirlaSor);
 $("tamEkran").addEventListener("click", tamEkranDegistir);
 // Tıklanan düğme odakta kalmasın; yoksa boşluk tuşu onu bir daha tetikler.
 document.querySelectorAll("button").forEach(b => b.addEventListener("click", () => b.blur()));
@@ -621,7 +662,7 @@ document.addEventListener("keydown", e => {
 
 new ResizeObserver(boyutla).observe(saatAlani);
 temaUygula();
-ayarla();
+geriYukle();
 
 // Web adresinden açıldığında: ilk ziyaretten sonra internetsiz de çalışsın
 if ("serviceWorker" in navigator && location.protocol === "https:") {
