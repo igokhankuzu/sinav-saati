@@ -57,6 +57,9 @@
              max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   }
 
+  /* iPhone ana ekran uygulaması: üstteki durum çubuğu ve bulanık bölgenin altından başla */
+  body.ios-uygulama main { padding-top: max(calc(env(safe-area-inset-top) + 12px), 68px); }
+
   .kontroller { width: 100%; max-width: 560px; transition: opacity 0.4s; }
   .ust { display: flex; flex-direction: column; gap: 10px; }
   .satir { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -408,6 +411,8 @@ let tamEkran = false, kontrolGoster = false, gizlemeZamani = null;
 // Ana ekrandan açılan uygulama zaten tam ekrandır; sınav sürerken kontroller orada da gizlenir.
 const uygulamaModu = matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches
   || navigator.standalone === true;
+// navigator.standalone sadece iPhone/iPad'de var
+if (navigator.standalone === true) document.body.classList.add("ios-uygulama");
 
 function sinavSaati() { return ayar.baslangicDakika * 60 + (sayac.toplam - sayac.kalan); }
 
