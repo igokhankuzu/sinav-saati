@@ -108,7 +108,10 @@
   #kalan.uyari, #kalan.bitti { color: var(--kirmizi); }
   #kalan.bitti { font-weight: 700; }
   #soruBilgi { color: var(--ikincil); font-size: 14px; }
-  .dugmeler { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .dugmeler { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+  .zil { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .zil button { min-width: 48px; padding: 0 12px; font-size: 18px; }
+  .zil small { font-size: 11px; color: var(--ikincil); white-space: nowrap; }
 
   /* Yatay telefon gibi alçak ekranlar: saat solda, kontroller sağda */
   @media (orientation: landscape) and (max-height: 620px) {
@@ -212,6 +215,10 @@
       <button id="sifirla">Sıfırla</button>
       <button id="tamEkran">Tam Ekran</button>
       <button id="temaAc">Tema</button>
+      <div class="zil">
+        <button id="ses" aria-label="Bitiş sesini aç veya kapat">🔔</button>
+        <small id="sesYazi">Bitiş sesi açık</small>
+      </div>
     </div>
   </div>
 </main>
@@ -280,7 +287,8 @@ const ayar = {
   duvar: kayit.oku("duvar", VARSAYILAN_TEMA.duvar),
   ekranZemin: kayit.oku("ekranZemin", VARSAYILAN_TEMA.ekranZemin),
   ekranYazi: kayit.oku("ekranYazi", VARSAYILAN_TEMA.ekranYazi),
-  dijitalGoster: kayit.oku("dijitalGoster", VARSAYILAN_TEMA.dijitalGoster)
+  dijitalGoster: kayit.oku("dijitalGoster", VARSAYILAN_TEMA.dijitalGoster),
+  sesAcik: kayit.oku("sesAcik", true)
 };
 function ayarKaydet(anahtar, deger) { ayar[anahtar] = deger; kayit.yaz(anahtar, deger); }
 
@@ -349,7 +357,7 @@ function sifirlaSor() {
 }
 function tik() {
   sayac.kalan = Math.max(0, (sayac.bitis - Date.now()) / 1000);
-  if (sayac.kalan === 0) { duraklat(); sesCal(); }
+  if (sayac.kalan === 0) { duraklat(); if (ayar.sesAcik) sesCal(); }
   guncelle();
 }
 
@@ -508,6 +516,8 @@ function guncelle() {
   $("ozel").classList.toggle("gorunur", s.soru === 0);
   $("ozelDakika").textContent = ayar.ozelDakika + " dk";
   $("tamEkran").textContent = tamEkran ? "Küçült" : "Tam Ekran";
+  $("ses").textContent = ayar.sesAcik ? "🔔" : "🔕";
+  $("sesYazi").textContent = ayar.sesAcik ? "Bitiş sesi açık" : "Bitiş sesi kapalı";
 
   const sade = (tamEkran || uygulamaModu) && sayac.calisiyor && !kontrolGoster;
   if (document.body.classList.contains("sade") !== sade) {
@@ -649,6 +659,12 @@ $("arti").addEventListener("click", () => ozelDegistir(5));
 $("baslat").addEventListener("click", () => sayac.calisiyor ? duraklat() : baslat());
 $("sifirla").addEventListener("click", sifirlaSor);
 $("tamEkran").addEventListener("click", tamEkranDegistir);
+// Süre bitince çalan zil; açınca bir kez çalar ki ses seviyesi duyulsun.
+$("ses").addEventListener("click", () => {
+  ayarKaydet("sesAcik", !ayar.sesAcik);
+  if (ayar.sesAcik) { sesHazirla(); sesCal(); }
+  guncelle();
+});
 // Tıklanan düğme odakta kalmasın; yoksa boşluk tuşu onu bir daha tetikler.
 document.querySelectorAll("button").forEach(b => b.addEventListener("click", () => b.blur()));
 
