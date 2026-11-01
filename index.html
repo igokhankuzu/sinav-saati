@@ -65,7 +65,7 @@
   .satir { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .satir label { color: var(--ikincil); font-size: 15px; }
 
-  select, input[type="time"], button {
+  select, input[type="time"], input[type="number"], button {
     font: inherit;
     font-size: 16px;
     color: var(--yazi);
@@ -83,10 +83,13 @@
   button:disabled, select:disabled, input:disabled { opacity: 0.45; cursor: default; }
   button.ana { background: var(--vurgu); color: var(--vurgu-yazi); border-color: transparent; font-weight: 600; min-width: 120px; }
 
-  .ozel { display: none; align-items: center; gap: 8px; margin-left: auto; }
+  .ozel { display: none; align-items: center; gap: 8px; flex-wrap: wrap; }
   .ozel.gorunur { display: flex; }
-  .ozel button { width: 44px; padding: 0; }
-  .ozel span { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+  .ozel label, .ozel span { color: var(--ikincil); font-size: 15px; }
+  #ozelGiris { width: 76px; text-align: center; padding: 0 8px; }
+  .hizliSureler { display: flex; gap: 6px; flex-wrap: wrap; }
+  .hizliSureler button { min-width: 42px; min-height: 40px; padding: 0 8px; font-size: 14px; }
+  .hizliSureler button.secili { background: var(--vurgu); color: var(--vurgu-yazi); border-color: transparent; font-weight: 600; }
 
   #saatAlani { flex: 1; width: 100%; position: relative; min-height: 200px; }
   .saatIc {
@@ -118,13 +121,21 @@
     main {
       display: grid;
       grid-template-columns: 1fr minmax(240px, 320px);
-      grid-template-rows: auto 1fr;
+      grid-template-rows: auto minmax(0, 1fr);
       grid-template-areas: "saat ust" "saat alt";
       align-items: start;
+      gap: 8px 14px;
     }
-    #saatAlani { grid-area: saat; height: 100%; }
-    .ust { grid-area: ust; }
-    .alt { grid-area: alt; align-self: center; }
+    #saatAlani { grid-area: saat; height: 100%; min-height: 0; }
+    .ust { grid-area: ust; gap: 6px; }
+    .alt { grid-area: alt; align-self: center; gap: 6px; max-height: 100%; overflow-y: auto; }
+    select, input[type="time"], input[type="number"], button { min-height: 36px; }
+    .hizliSureler button { min-height: 36px; }
+    .bilgi { gap: 0; }
+    #aralik { font-size: 15px; }
+    #kalan { font-size: 14px; }
+    #soruBilgi { font-size: 12px; }
+    .dugmeler { gap: 6px; }
     body.sade main { grid-template-columns: 1fr 0; gap: 0; }
   }
 
@@ -189,10 +200,19 @@
     <div class="satir">
       <label for="baslangic">Başlangıç</label>
       <input type="time" id="baslangic" value="10:15">
-      <div class="ozel" id="ozel">
-        <button id="eksi" aria-label="5 dakika azalt">−</button>
-        <span id="ozelDakika">30 dk</span>
-        <button id="arti" aria-label="5 dakika artır">+</button>
+    </div>
+    <!-- Özel süre: elle yazılır ya da hazır seçeneklerden seçilir -->
+    <div class="ozel" id="ozel">
+      <label for="ozelGiris">Süre</label>
+      <input type="number" id="ozelGiris" inputmode="numeric" min="1" max="300" step="1" aria-label="Süre, dakika">
+      <span>dk</span>
+      <div class="hizliSureler" id="hizliSureler">
+        <button data-dakika="15">15</button>
+        <button data-dakika="30">30</button>
+        <button data-dakika="45">45</button>
+        <button data-dakika="60">60</button>
+        <button data-dakika="90">90</button>
+        <button data-dakika="120">120</button>
       </div>
     </div>
   </div>
@@ -512,9 +532,15 @@ function guncelle() {
   // Deneme yarıdayken sınav ve saat değiştirilemez; değiştirmek denemeyi sıfırlardı.
   const kilitli = sayac.calisiyor || devamEdiyor();
   $("sinav").disabled = $("baslangic").disabled = kilitli;
-  $("eksi").disabled = $("arti").disabled = kilitli;
+  const ozelGiris = $("ozelGiris");
+  ozelGiris.disabled = kilitli;
+  // Kişi yazarken alana dokunma; yoksa yazdığı silinirdi.
+  if (document.activeElement !== ozelGiris) ozelGiris.value = ayar.ozelDakika;
+  document.querySelectorAll("#hizliSureler button").forEach(b => {
+    b.disabled = kilitli;
+    b.classList.toggle("secili", Number(b.dataset.dakika) === ayar.ozelDakika);
+  });
   $("ozel").classList.toggle("gorunur", s.soru === 0);
-  $("ozelDakika").textContent = ayar.ozelDakika + " dk";
   $("tamEkran").textContent = tamEkran ? "Küçült" : "Tam Ekran";
   $("ses").textContent = ayar.sesAcik ? "🔔" : "🔕";
   $("sesYazi").textContent = ayar.sesAcik ? "Bitiş sesi açık" : "Bitiş sesi kapalı";
@@ -649,12 +675,24 @@ baslangicKutusu.addEventListener("change", () => {
   if (!Number.isNaN(s) && !Number.isNaN(d)) { ayarKaydet("baslangicDakika", s * 60 + d); guncelle(); }
 });
 
-function ozelDegistir(fark) {
-  ayarKaydet("ozelDakika", Math.min(300, Math.max(1, ayar.ozelDakika + fark)));
+function ozelSureAyarla(sure) {
+  if (sure === ayar.ozelDakika) return;
+  ayarKaydet("ozelDakika", sure);
   ayarla();
 }
-$("eksi").addEventListener("click", () => ozelDegistir(-5));
-$("arti").addEventListener("click", () => ozelDegistir(5));
+// Yazılan süre anında geçerli olur; ayrıca onaylamak gerekmez.
+$("ozelGiris").addEventListener("input", e => {
+  const sure = parseInt(e.target.value, 10);
+  if (!(sure >= 1)) return;
+  if (sure > 300) e.target.value = 300;
+  ozelSureAyarla(Math.min(300, sure));
+});
+// Alan boş ya da geçersiz bırakıldıysa geçerli süreyi yeniden göster.
+$("ozelGiris").addEventListener("blur", e => { e.target.value = ayar.ozelDakika; });
+$("ozelGiris").addEventListener("keydown", e => { if (e.key === "Enter") e.target.blur(); });
+document.querySelectorAll("#hizliSureler button").forEach(b => {
+  b.addEventListener("click", () => ozelSureAyarla(Number(b.dataset.dakika)));
+});
 
 $("baslat").addEventListener("click", () => sayac.calisiyor ? duraklat() : baslat());
 $("sifirla").addEventListener("click", sifirlaSor);
