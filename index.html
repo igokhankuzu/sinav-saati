@@ -97,6 +97,31 @@
     display: flex; flex-direction: column; align-items: center; justify-content: center;
   }
   canvas { display: block; }
+
+  /* Süre bitince saatin üzerine gelen uyarı */
+  #kadran { position: relative; }
+  #sureDoldu { display: none; position: absolute; inset: 0; pointer-events: none; }
+  body.bitti #sureDoldu { display: block; }
+  #sureDoldu .renk, #sureDoldu .halka { position: absolute; border-radius: 50%; }
+  #sureDoldu .renk { inset: 6.25%; background: #d91a1a; opacity: 0.22; animation: renkNabzi 1.4s ease-in-out infinite alternate; }
+  #sureDoldu .halka { inset: 0; border: var(--halka, 6px) solid #d91a1a; box-shadow: 0 0 var(--isik, 16px) rgba(217, 26, 26, 0.8); animation: halkaNabzi 1.4s ease-in-out infinite alternate; }
+  #sureDoldu .etiket {
+    position: absolute; left: 50%; top: 66.5%;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+    background: #d91a1a; color: #fff;
+    font-weight: 800; letter-spacing: 0.01em; line-height: 1.2;
+    padding: 0.24em 0.52em; border-radius: 999px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    animation: etiketNabzi 1.4s ease-in-out infinite alternate;
+  }
+  @keyframes renkNabzi { from { opacity: 0.08; } to { opacity: 0.22; } }
+  @keyframes halkaNabzi { from { opacity: 0.45; } to { opacity: 1; } }
+  @keyframes etiketNabzi { from { transform: translate(-50%, -50%) scale(1); } to { transform: translate(-50%, -50%) scale(1.04); } }
+  /* Cihazda "hareketi azalt" açıksa yanıp sönmez, sabit kırmızı kalır */
+  @media (prefers-reduced-motion: reduce) {
+    #sureDoldu .renk, #sureDoldu .halka, #sureDoldu .etiket { animation: none; }
+  }
   #dijital {
     font-family: ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
     font-weight: 500;
@@ -219,7 +244,14 @@
 
   <section id="saatAlani">
     <div class="saatIc" id="saatIc">
-      <canvas id="saat" aria-label="Analog sınav saati"></canvas>
+      <div id="kadran">
+        <canvas id="saat" aria-label="Analog sınav saati"></canvas>
+        <div id="sureDoldu">
+          <div class="renk"></div>
+          <div class="halka"></div>
+          <div class="etiket" id="sureDolduYazi">SÜRE DOLDU</div>
+        </div>
+      </div>
       <div id="dijital"></div>
     </div>
   </section>
@@ -487,6 +519,9 @@ function boyutla() {
   tuval.style.width = tuval.style.height = boy + "px";
   tuval.width = tuval.height = Math.round(boy * dpr);
   $("saatIc").style.gap = (boy * 0.025) + "px";
+  $("sureDolduYazi").style.fontSize = (boy * 0.058) + "px";
+  $("sureDoldu").style.setProperty("--halka", (boy * 0.022) + "px");
+  $("sureDoldu").style.setProperty("--isik", (boy * 0.05) + "px");
   dijital.style.fontSize = Math.max(16, boy * 0.065) + "px";
   dijital.style.padding = `${boy * 0.012}px ${boy * 0.04}px`;
   dijital.style.borderRadius = (boy * 0.024) + "px";
@@ -516,6 +551,7 @@ function guncelle() {
 
   saatCiz(t);
   dijital.textContent = saatDakikaSaniye(t);
+  document.body.classList.toggle("bitti", sayac.toplam > 0 && sayac.kalan === 0);
 
   $("aralik").textContent = `${saatDakika(bas)} → ${saatDakika(bas + sayac.toplam)}`;
   const kalan = $("kalan");
