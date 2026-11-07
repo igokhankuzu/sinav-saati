@@ -369,12 +369,32 @@ function yerelTarih(metin) {
   return y && a && g ? new Date(y, a - 1, g) : null;
 }
 function bugunBasi() { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
-// Kullanıcının girdiği tarih (gelecekteyse) ya da listedeki en yakın gelecek tarih.
+// ÖSYM takviminden her gün güncellenen tarihler (tarihler.json). Son alınan kayıtlı kalır;
+// internet yokken o kullanılır, o da yoksa yukarıdaki listedeki tarihler.
+let uzakTarihler = kayit.oku("uzakTarihler", {});
+async function uzakTarihleriAl() {
+  try {
+    const yanit = await fetch("tarihler.json", { cache: "no-cache" });
+    if (!yanit.ok) return;
+    const veri = await yanit.json();
+    if (!veri || typeof veri.sinavlar !== "object") return;
+    const temiz = {};
+    for (const [ad, liste] of Object.entries(veri.sinavlar)) {
+      if (Array.isArray(liste)) temiz[ad] = liste.filter(t => typeof t === "string" && yerelTarih(t));
+    }
+    uzakTarihler = temiz;
+    kayit.yaz("uzakTarihler", temiz);
+    guncelle();
+  } catch {}
+}
+
+// Kullanıcının girdiği tarih (gelecekteyse) ya da bilinen en yakın gelecek tarih.
 function siradakiTarih(s) {
   const bugun = bugunBasi();
   const kullanici = yerelTarih(ayar.tarihler[s.ad]);
   if (kullanici && kullanici >= bugun) return kullanici;
-  return s.tarihler.map(yerelTarih).filter(t => t && t >= bugun).sort((x, y) => x - y)[0] || null;
+  return [...s.tarihler, ...(uzakTarihler[s.ad] || [])]
+    .map(yerelTarih).filter(t => t && t >= bugun).sort((x, y) => x - y)[0] || null;
 }
 function kalanGunMetni(tarih) {
   const gun = Math.round((tarih - bugunBasi()) / 86400000);
@@ -809,6 +829,7 @@ document.addEventListener("keydown", e => {
 new ResizeObserver(boyutla).observe(saatAlani);
 temaUygula();
 geriYukle();
+uzakTarihleriAl();
 
 // Web adresinden açıldığında: ilk ziyaretten sonra internetsiz de çalışsın
 if ("serviceWorker" in navigator && location.protocol === "https:") {
