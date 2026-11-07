@@ -65,7 +65,14 @@
   .satir { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .satir label { color: var(--ikincil); font-size: 15px; }
 
-  select, input[type="time"], input[type="number"], button {
+  #tarihSatiri { font-size: 15px; }
+  #kalanGun { font-weight: 600; }
+  #kalanGun.belirsiz { font-weight: 400; color: var(--ikincil); }
+  #sinavTarihi { margin-left: auto; padding: 0 10px; }
+  input[type="date"] { color-scheme: light; }
+  body.koyu input[type="date"] { color-scheme: dark; }
+
+  select, input[type="time"], input[type="number"], input[type="date"], button {
     font: inherit;
     font-size: 16px;
     color: var(--yazi);
@@ -154,7 +161,7 @@
     #saatAlani { grid-area: saat; height: 100%; min-height: 0; }
     .ust { grid-area: ust; gap: 6px; }
     .alt { grid-area: alt; align-self: center; gap: 6px; max-height: 100%; overflow-y: auto; }
-    select, input[type="time"], input[type="number"], button { min-height: 36px; }
+    select, input[type="time"], input[type="number"], input[type="date"], button { min-height: 36px; }
     .hizliSureler button { min-height: 36px; }
     .bilgi { gap: 0; }
     #aralik { font-size: 15px; }
@@ -222,6 +229,12 @@
 <main>
   <div class="kontroller ust">
     <select id="sinav" aria-label="Sınav"></select>
+    <!-- Sınava kalan gün. Deneme sürerken dikkat dağıtmasın diye gizlenir. -->
+    <div class="satir" id="tarihSatiri">
+      <span aria-hidden="true">📅</span>
+      <span id="kalanGun"></span>
+      <input type="date" id="sinavTarihi" aria-label="Sınav tarihi">
+    </div>
     <div class="satir">
       <label for="baslangic">Başlangıç</label>
       <input type="time" id="baslangic" value="10:15">
@@ -296,12 +309,14 @@
 <script>
 // ---------- Veriler ----------
 // Yeni bir sınav eklemek için listeye bir satır eklemen yeterli. soru: 0 = özel süre.
+// tarihler: bilinen sınav tarihleri (yıl-ay-gün). ÖSYM takvimi açıklandıkça buraya eklenir.
 const SINAVLAR = [
-  { ad: "KPSS Genel Yetenek - Genel Kültür", dakika: 130, soru: 120 },
-  { ad: "KPSS Eğitim Bilimleri", dakika: 100, soru: 80 },
-  { ad: "ALES", dakika: 150, soru: 100 },
-  { ad: "YDS", dakika: 180, soru: 80 },
-  { ad: "Özel Süre", dakika: 30, soru: 0 }
+  // 2027'de yalnızca A grubu GY-GK oturumu var; B grubu (lisans) bir sonraki 2028'de.
+  { ad: "KPSS Genel Yetenek - Genel Kültür", dakika: 130, soru: 120, tarihler: ["2027-09-12"] },
+  { ad: "KPSS Eğitim Bilimleri", dakika: 100, soru: 80, tarihler: [] },
+  { ad: "ALES", dakika: 150, soru: 100, tarihler: ["2026-11-29", "2027-04-18", "2027-07-11", "2027-11-28"] },
+  { ad: "YDS", dakika: 180, soru: 80, tarihler: ["2026-11-22", "2027-03-28"] },
+  { ad: "Özel Süre", dakika: 30, soru: 0, tarihler: [] }
 ];
 
 const DUVAR_GUNDUZ = [
@@ -340,12 +355,34 @@ const ayar = {
   ekranZemin: kayit.oku("ekranZemin", VARSAYILAN_TEMA.ekranZemin),
   ekranYazi: kayit.oku("ekranYazi", VARSAYILAN_TEMA.ekranYazi),
   dijitalGoster: kayit.oku("dijitalGoster", VARSAYILAN_TEMA.dijitalGoster),
-  sesAcik: kayit.oku("sesAcik", true)
+  sesAcik: kayit.oku("sesAcik", true),
+  tarihler: kayit.oku("tarihler", {}) // kullanıcının girdiği sınav tarihleri: sınav adı → "yıl-ay-gün"
 };
 function ayarKaydet(anahtar, deger) { ayar[anahtar] = deger; kayit.yaz(anahtar, deger); }
 
 // ---------- Sayaç: bitiş anını tutar, böylece hiç kaymaz ----------
 const sayac = { toplam: 0, kalan: 0, calisiyor: false, bitis: 0, zamanlayici: null };
+
+// ---------- Sınava kalan gün ----------
+function yerelTarih(metin) {
+  const [y, a, g] = (metin || "").split("-").map(Number);
+  return y && a && g ? new Date(y, a - 1, g) : null;
+}
+function bugunBasi() { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+// Kullanıcının girdiği tarih (gelecekteyse) ya da listedeki en yakın gelecek tarih.
+function siradakiTarih(s) {
+  const bugun = bugunBasi();
+  const kullanici = yerelTarih(ayar.tarihler[s.ad]);
+  if (kullanici && kullanici >= bugun) return kullanici;
+  return s.tarihler.map(yerelTarih).filter(t => t && t >= bugun).sort((x, y) => x - y)[0] || null;
+}
+function kalanGunMetni(tarih) {
+  const gun = Math.round((tarih - bugunBasi()) / 86400000);
+  if (gun === 0) return "Sınav bugün, başarılar!";
+  if (gun === 1) return "Sınav yarın!";
+  return `Sınava ${gun} gün kaldı`;
+}
+function tarihMetni(t) { return `${t.getFullYear()}-${iki(t.getMonth() + 1)}-${iki(t.getDate())}`; }
 
 function secilenSinav() { return SINAVLAR.find(s => s.ad === ayar.sinav) || SINAVLAR[0]; }
 function dakika() { const s = secilenSinav(); return s.soru === 0 ? ayar.ozelDakika : s.dakika; }
@@ -568,6 +605,17 @@ function guncelle() {
   // Deneme yarıdayken sınav ve saat değiştirilemez; değiştirmek denemeyi sıfırlardı.
   const kilitli = sayac.calisiyor || devamEdiyor();
   $("sinav").disabled = $("baslangic").disabled = kilitli;
+  // Sınava kalan gün: deneme sürerken ve özel sürede gizli
+  $("tarihSatiri").style.display = (kilitli || s.soru === 0) ? "none" : "";
+  if (s.soru > 0) {
+    const tarih = siradakiTarih(s);
+    const kalanGun = $("kalanGun");
+    kalanGun.textContent = tarih ? kalanGunMetni(tarih) : "Sınav tarihi belli değil, tarihi seç:";
+    kalanGun.classList.toggle("belirsiz", !tarih);
+    const tarihKutusu = $("sinavTarihi");
+    if (document.activeElement !== tarihKutusu) tarihKutusu.value = tarih ? tarihMetni(tarih) : "";
+  }
+
   const ozelGiris = $("ozelGiris");
   ozelGiris.disabled = kilitli;
   // Kişi yazarken alana dokunma; yoksa yazdığı silinirdi.
@@ -709,6 +757,14 @@ baslangicKutusu.value = saatDakika(ayar.baslangicDakika * 60);
 baslangicKutusu.addEventListener("change", () => {
   const [s, d] = baslangicKutusu.value.split(":").map(Number);
   if (!Number.isNaN(s) && !Number.isNaN(d)) { ayarKaydet("baslangicDakika", s * 60 + d); guncelle(); }
+});
+
+$("sinavTarihi").addEventListener("change", e => {
+  const tarihler = { ...ayar.tarihler };
+  if (e.target.value) tarihler[secilenSinav().ad] = e.target.value;
+  else delete tarihler[secilenSinav().ad];
+  ayarKaydet("tarihler", tarihler);
+  guncelle();
 });
 
 function ozelSureAyarla(sure) {

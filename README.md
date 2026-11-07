@@ -18,6 +18,7 @@ Kurulum gerekmez. Telefonda, tablette ve bilgisayarda tarayıcıdan açılır.
 - **Temalar:** Gündüz ve gece için duvar renkleri, farklı dijital saat görünümleri
 - **Kaldığı yerden devam:** Uygulama kapansa bile deneme kaybolmaz
 - **Ekran açık kalır:** Sınav sürerken telefonun ekranı kararmaz
+- **Sınava kalan gün:** Seçilen sınavın en yakın tarihine kaç gün kaldığını gösterir; deneme sürerken gizlenir
 - **Bitiş sesi:** Süre bitince kısa bir zil çalar; 🔔 düğmesiyle kapatılabilir
 - **İnternetsiz çalışır:** İlk açılıştan sonra internet gerekmez
 

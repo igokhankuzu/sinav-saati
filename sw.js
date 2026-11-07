@@ -1,6 +1,6 @@
 // İlk ziyarette dosyaları saklar; sonra internet olmasa da uygulama açılır.
 // Sayfayı güncelleyince SURUM'ü bir artır ki telefonlar yeni sürümü alsın.
-const SURUM = "sinav-saati-v6";
+const SURUM = "sinav-saati-v7";
 const DOSYALAR = ["./", "index.html", "manifest.webmanifest", "simge-192.png", "simge-512.png", "apple-touch-icon.png"];
 
 self.addEventListener("install", olay => {
